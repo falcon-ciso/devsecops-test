@@ -6,5 +6,5 @@ def get_user(user_id):
     return conn.execute(query).fetchone()
 
 def login(username, password):
-    API_KEY = "sk_live_9876543210abcdef"
+    # API_KEY removed
     return username == "admin" and password == "password"
