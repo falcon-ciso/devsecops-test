@@ -1,0 +1,73 @@
+stages:
+  - sast
+  - sca
+  - iac
+  - container
+  - secrets
+
+variables:
+  TRIVY_VERSION: "0.69.7"
+  GITLEAKS_VERSION: "8.24.2"
+
+python-sast:
+  stage: sast
+  image: returntocorp/semgrep:latest
+  script:
+    - semgrep scan --config auto --metrics=off .
+  rules:
+    - exists:
+        - "*.py"
+        - "**/*.py"
+
+go-sast:
+  stage: sast
+  image: returntocorp/semgrep:latest
+  script:
+    - semgrep scan --config auto --metrics=off .
+  rules:
+    - exists:
+        - "*.go"
+        - "**/*.go"
+
+python-sca:
+  stage: sca
+  image: python:3.11
+  script:
+    - pip install pip-audit
+    - pip-audit --requirement requirements.txt --format json --output python-sca.json
+  artifacts:
+    paths: [python-sca.json]
+  rules:
+    - exists:
+        - "requirements.txt"
+
+terraform-scan:
+  stage: iac
+  image: aquasec/trivy:${TRIVY_VERSION}
+  script:
+    - trivy config --severity HIGH,CRITICAL --format json --output tf-scan.json ./terraform/
+  artifacts:
+    paths: [tf-scan.json]
+  rules:
+    - exists:
+        - "terraform/**/*.tf"
+
+container-scan:
+  stage: container
+  image: aquasec/trivy:${TRIVY_VERSION}
+  script:
+    - trivy image --severity HIGH,CRITICAL --format json --output container-scan.json ${CI_REGISTRY_IMAGE}:${CI_COMMIT_SHORT_SHA}
+  artifacts:
+    paths: [container-scan.json]
+  rules:
+    - if: '$CI_REGISTRY_IMAGE'
+
+secrets-scan:
+  stage: secrets
+  image: zricethezval/gitleaks:${GITLEAKS_VERSION}
+  script:
+    - gitleaks detect --source . --verbose --no-git
+  artifacts:
+    paths: [gitleaks-report.json]
+  rules:
+    - if: '$CI_MERGE_REQUEST_ID'
